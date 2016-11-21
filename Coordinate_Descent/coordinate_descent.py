@@ -8,6 +8,7 @@ from sklearn.linear_model import SGDClassifier
 from sklearn import preprocessing
 import warnings
 import random
+import matplotlib.pyplot as plt
 
 ERR_THRESH = 0.0001
 
@@ -68,7 +69,7 @@ class CoordinateDescent(object):
         print self.test_features
     
     def logistic_regression(self):
-        log_reg = linear_model.LogisticRegression(solver="sag", multi_class= 'multinomial', C=100000)
+        log_reg = linear_model.LogisticRegression(solver="lbfgs", multi_class= 'multinomial', C=100000)
         log_reg.fit(self.train_features, self.train_targets)
         accuracy = 0    
         y_pred = []
@@ -92,6 +93,7 @@ class CoordinateDescent(object):
         self.gradient = np.dot(np.transpose(self.train_label) - self.prob_x, self.train_features)
 
     def random_descent(self, learning_rate, iterations, method="random"):
+        all_costs, iters, all_errors = [], [], []
         for iter_count in range(iterations):
             self.compute_gradient()
             if method == "random":
@@ -102,15 +104,20 @@ class CoordinateDescent(object):
                 rand_row = np.argmax(self.gradient) / 14
             self.weight[rand_row][rand_col] = self.weight[rand_row][rand_col] +\
                                                     learning_rate * self.gradient[rand_row][rand_col]
-            curr_cost = 0
             if iter_count % 20 == 0:
+                curr_cost = 0
                 prev_cost = curr_cost if iter_count > 0 else None
                 for idx in range(self.train_features.shape[0]):
                     curr_cost += -1.0 * np.log(self.prob_x[self.train_targets[idx]-1][idx])
                 if prev_cost is not None and (abs(prev_cost - curr_cost) < ERR_THRESH):
-                    return
-                print "Accuracy after " + str(iter_count) + " Iterations: " + str(self.predict()) + "  Loss: " + str(curr_cost)
-        return
+                    return iters, all_costs, all_errors
+                acc = self.test_features.shape[0] - self.predict()
+                print "Accuracy after " + str(iter_count) + " Iterations: " + str(acc) + "  Loss: " + str(curr_cost)
+            if iter_count % 100 == 0:
+                all_costs.append(curr_cost)
+                iters.append(iter_count)
+                all_errors.append(acc)
+        return iters, all_costs, all_errors
 
     def predict(self):
         wx_predict = np.dot(self.weight, np.transpose(self.test_features))
@@ -121,13 +128,34 @@ class CoordinateDescent(object):
 
 def main():
     warnings.filterwarnings('ignore')
+
     coord_descent = CoordinateDescent('wine.data.txt')
     coord_descent.pre_process()
     coord_descent.logistic_regression()
+    iters_r, all_costs_r, accuracy_r = coord_descent.random_descent(0.01, 50000, method="random")
 
-    coord_descent.compute_gradient()
-    coord_descent.random_descent(0.01, 50000, method="random")
-    coord_descent.predict()
+
+    coord_descent_greedy = CoordinateDescent('wine.data.txt')
+    coord_descent_greedy.pre_process()
+    iters_g, all_costs_g, accuracy_g = coord_descent_greedy.random_descent(0.01, 50000, method="greedy")
+
+    plt.figure()
+    plt.plot(iters_r, all_costs_r, 'r', label='Random')
+    plt.plot(iters_g, all_costs_g, 'b', label='Greedy')
+    plt.xlabel("Iteration")
+    plt.ylabel("Log-loss")
+    plt.xscale('log')
+    plt.legend(loc='upper right', shadow=True)
+    plt.show()
+
+    plt.figure()
+    plt.plot(iters_r, accuracy_r, 'r', label='Random')
+    plt.plot(iters_g, accuracy_g, 'b', label='Greedy')
+    plt.xlabel("Iteration")
+    plt.ylabel("Log-loss")
+    plt.xscale('log')
+    plt.legend(loc='upper right', shadow=True)
+    plt.show()
 
 if __name__ == "__main__":
     main()
